@@ -17,9 +17,9 @@ db.authenticate()
   .then(() => console.log("MYSQL CONNECTED"))
   .catch((error) => console.log("DB_ERROR", error));
 
-// db.sync({alter : true})
-//   .then(() => console.log("DATABASE SYCN SUCCESSFULLY"))
-//   .catch((error) => console.log("ERROR", error));
+db.sync({alter : true})
+  .then(() => console.log("DATABASE SYCN SUCCESSFULLY"))
+  .catch((error) => console.log("ERROR", error));
 
 app.use("/", router);
 app.listen(`${process.env.PORT}`, console.log(`server is sunning port : ${process.env.PORT}`));
