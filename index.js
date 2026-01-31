@@ -29,10 +29,6 @@
 //   console.log(`server is sunning port : ${process.env.PORT}`),
 // );
 
-
-
-
-
 import express from "express";
 import db from "./config/db.js";
 import router from "./routers/user.router.js";
@@ -41,10 +37,7 @@ import cors from "cors";
 const app = express();
 app.use(express.json());
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  process.env.C_URL,
-];
+const allowedOrigins = ["http://localhost:5173", process.env.C_URL];
 
 app.use(
   cors({
@@ -60,7 +53,7 @@ app.use(
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
-  })
+  }),
 );
 
 // ✅ Models import (IMPORTANT for table creation)
@@ -72,7 +65,7 @@ db.authenticate()
   .catch((error) => console.log("DB_ERROR", error));
 
 // ❗ Production me sync mat chalao
-// db.sync({ alter: true });
+db.sync({ alter: true });
 
 app.use("/", router);
 

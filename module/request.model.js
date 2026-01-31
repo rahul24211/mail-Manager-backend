@@ -29,7 +29,7 @@ const Requests = db.define("requests", {
   },
 
   compose_mail: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: false,
   },
 
