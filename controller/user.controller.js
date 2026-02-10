@@ -1,7 +1,9 @@
 import Users from "../module/user.model.js";
 import jwt from "jsonwebtoken";
 import Requests from "../module/request.model.js";
-import { where } from "sequelize";
+import Notifications from "../module/notification.model.js";
+import { Op, where } from "sequelize";
+import { createNotification } from "../helper/sendNotification.js";
 
 export const createUser = async (req, res) => {
   const { name, email, password, userType } = req.body;
@@ -66,7 +68,7 @@ export const login = async (req, res) => {
 
     const payload = {
       id: user.id,
-      name: user.id,
+      name: user.name,
       email: user.email,
       userType: user.userType,
     };
@@ -110,6 +112,13 @@ export const registerRequest = async (req, res) => {
       status: "Pending",
       toUserId: checkHr.id,
     });
+    await createNotification({
+      to: checkHr.id,
+      from: userId,
+      tital: `${req.user.name} send mail`,
+      subject: `${subject}`,
+      requestId: newRequest.id,
+    });
 
     res
       .status(201)
@@ -141,6 +150,13 @@ export const updateStatus = async (req, res) => {
     }
     checkRequest.status = status;
     await checkRequest.save();
+    await createNotification({
+      to: checkRequest.userId,
+      from: user.id,
+      tital: `${user.name} react your request`,
+      subject: `${user.name}, ${status} your ${checkRequest.subject}`,
+      requestId: checkRequest.id,
+    });
 
     res
       .status(200)
@@ -167,6 +183,8 @@ export const getAllRequests = async (req, res) => {
           attributes: ["email"],
         },
       ],
+
+      order: [["createdAt", "DESC"]],
     });
 
     const results = {
@@ -194,7 +212,10 @@ export const userMail = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    const mails = await Requests.findAll({ where: { userId: userId } });
+    const mails = await Requests.findAll({
+      where: { userId: userId },
+      order: [["createdAt", "DESC"]],
+    });
 
     // main mails (user ki)
     // const mainMails = mails.filter(
@@ -320,6 +341,14 @@ export const sendReply = async (req, res) => {
       parentMailId: originalMail.id,
       status: "Reply",
     });
+
+    await createNotification({
+      to: originalMail.userId,
+      from: originalMail.toUserId,
+      tital: `${req.user.name} reply your reauest`,
+      subject: `${originalMail.subject}`,
+      requestId: originalMail.id,
+    });
     res.status(200).json({ message: "Reply sent", reply });
   } catch (error) {
     console.log(error);
@@ -344,7 +373,9 @@ export const getSummary = async (req, res) => {
 
     const AllUser = await Users.count({ where: { userType: "Employee" } });
 
-    const AllRequest = await Requests.count();
+    const AllRequest = await Requests.count({
+      where: { status: { [Op.ne]: "Reply" } },
+    });
     const AllRequestApprove = await Requests.count({
       where: { status: "Approve" },
     });
@@ -352,6 +383,8 @@ export const getSummary = async (req, res) => {
       where: { status: "Pending" },
     });
     const Reject = await Requests.count({ where: { status: "Reject" } });
+
+    const replies = await Requests.count({ where: { status: "Reply" } });
 
     res.status(200).json({
       message: "Details Fetched Successfully",
@@ -361,9 +394,12 @@ export const getSummary = async (req, res) => {
         AllRequestApprove: AllRequestApprove,
         AllRequestPending: AllRequestPending,
         Reject: Reject,
+        Reply: replies,
       },
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 export const changePassword = async (req, res) => {
@@ -418,10 +454,122 @@ export const allUsers = async (req, res) => {
       return res.status(403).json({ message: "Unauthorize" });
     }
 
-    const allUsers = await Users.findAll({where : {userType : "Employee"}});
+    const allUsers = await Users.findAll({
+      where: { userType: "Employee" },
+      order: [["createdAt", "DESC"]],
+    });
     res
       .status(200)
       .json({ message: "Users Fetched Successfully", users: allUsers });
+  } catch (error) {
+    console.log(error.message);
+  }
+};
+
+export const getAllNotifications = async (req, res) => {
+  const userId = req.user.id;
+  try {
+    if (!userId) {
+      return res.status(400).json({ message: "unAuthorise" });
+    }
+
+    const notification = await Notifications.findAll({
+      where: { to: userId },
+      order: [["createdAt", "DESC"]],
+    });
+
+    res
+      .status(200)
+      .json({ message: "notification fetch succesuccefully", notification });
+  } catch (error) {
+    console.log(error.message);
+  }
+};
+
+export const deleteNotification = async (req, res) => {
+  const { id } = req.query;
+  try {
+    if (!id) {
+      return res.status(400).json({ message: "notificationId is required" });
+    }
+
+    const notification = await Notifications.findOne({ where: { id: id } });
+    if (!notification) {
+      return res.status(404).json({ message: "notification not found" });
+    }
+
+    const deletedNotificaiton = await Notifications.destroy({
+      where: { id: id },
+    });
+
+    res.status(200).json({
+      message: "notification delete successfully",
+      deletedNotificaiton,
+    });
+  } catch (error) {
+    console.log(error.message);
+  }
+};
+
+export const mailStats = async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const mails = await Requests.findAll({ where: { userId: userId } });
+
+    if (!mails) {
+      return res.status(404).json({ message: "Mail Not Found" });
+    }
+
+    let Approve = 0;
+    let Pending = 0;
+    let Reject = 0;
+    let Reply = 0;
+
+    for (const mail of mails) {
+      if (mail.status === "Approve") {
+        Approve++;
+      } else if (mail.status === "Pending") {
+        Pending++;
+      } else if (mail.status === "Reject") {
+        Reject++;
+      } else {
+        Reply++;
+      }
+    }
+
+    res.status(200).json({
+      message: "mail fetch successfully",
+      mail: {
+        totalMail: mails.length,
+        approved: Approve,
+        pending: Pending,
+        rejected: Reject,
+        reply: Reply,
+      },
+    });
+  } catch (error) {
+    console.log(error.message);
+  }
+};
+
+export const updateUserStatus = async (req,res) => {
+  
+  const { status, id } = req.body;
+ 
+  try {
+    if (!id || !status) {
+      return res
+        .status(400)
+        .json({ message: "id And Status Both Are Required" });
+    }
+
+    let user = await Users.findOne({ where: { id: id } });
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+    user.status = status;
+    await user.save();
+    res.status(200).json({ message: `User ${status} successfully` });
   } catch (error) {
     console.log(error.message);
   }

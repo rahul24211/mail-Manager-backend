@@ -13,7 +13,7 @@ const Requests = db.define("requests", {
     onDelete: "CASCADE",
     onUpdate: "CASCADE",
   },
-
+  
   toUserId: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -34,7 +34,7 @@ const Requests = db.define("requests", {
   },
 
   status: {
-    type: DataTypes.ENUM("Pending", "Approve", "Reject","Reply"),
+    type: DataTypes.ENUM("Pending", "Approve", "Reject", "Reply"),
     allowNull: false,
     defaultValue: "Pending",
   },

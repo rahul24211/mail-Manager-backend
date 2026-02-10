@@ -5,13 +5,17 @@ import {
   changePassword,
   createUser,
   deletedMailByUser,
+  deleteNotification,
   fetchMailById,
+  getAllNotifications,
   getAllRequests,
   getSummary,
   login,
+  mailStats,
   registerRequest,
   sendReply,
   updateStatus,
+  updateUserStatus,
   userDetails,
   userMail,
 } from "../controller/user.controller.js";
@@ -31,4 +35,9 @@ router.get("/getsummary", verifyToken, getSummary);
 router.patch("/changepassword", verifyToken, changePassword);
 router.get("/userdetails", verifyToken, userDetails);
 router.get("/allusers", verifyToken, allUsers);
+router.get("/getallnotification", verifyToken, getAllNotifications);
+router.delete("/deletenotification", verifyToken, deleteNotification);
+router.get("/mailstats", verifyToken, mailStats);
+router.patch("/updateuserstatus", verifyToken, updateUserStatus);
+
 export default router;

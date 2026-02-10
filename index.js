@@ -65,7 +65,7 @@ db.authenticate()
   .catch((error) => console.log("DB_ERROR", error));
 
 // ❗ Production me sync mat chalao
-db.sync({ alter: true });
+// db.sync();
 
 app.use("/", router);
 
