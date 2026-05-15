@@ -1,34 +1,3 @@
-// import express from "express";
-// import db from "./config/db.js";
-// import router from "./routers/user.router.js";
-// import cors from "cors";
-
-// const app = express();
-// app.use(express.json());
-// app.use(
-//   cors({
-//     origin: ["http://localhost:5173", `${process.env.C_URL}`],
-//     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-//     credentials: true,
-//   }),
-// );
-// import "./module/user.model.js";
-// import "./module/request.model.js";
-
-// db.authenticate()
-//   .then(() => console.log("MYSQL CONNECTED"))
-//   .catch((error) => console.log("DB_ERROR", error));
-
-// // db.sync({alter : true})
-// //   .then(() => console.log("DATABASE SYCN SUCCESSFULLY"))
-// //   .catch((error) => console.log("ERROR", error));
-
-// app.use("/", router);
-// app.listen(
-//   `${process.env.PORT}`,
-//   console.log(`server is sunning port : ${process.env.PORT}`),
-// );
-
 import express from "express";
 import db from "./config/db.js";
 import router from "./routers/user.router.js";
@@ -36,6 +5,7 @@ import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use("/uploads", express.static("uploads"));
 
 const allowedOrigins = ["http://localhost:5173", process.env.C_URL];
 

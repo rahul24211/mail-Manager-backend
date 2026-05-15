@@ -1,19 +1,13 @@
 import { DataTypes } from "sequelize";
 import db from "../config/db.js";
-
-const Users = db.define("users", {
+const Users = db.define("Users", {
   id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     primaryKey: true,
     autoIncrement: true,
   },
-
-  name: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-
+  name: { type: DataTypes.STRING, allowNull: true },
   email: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -23,12 +17,14 @@ const Users = db.define("users", {
     type: DataTypes.STRING,
     allowNull: false,
   },
-
   userType: {
     type: DataTypes.ENUM("Admin", "HR", "Employee"),
     allowNull: false,
   },
-
+  image: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   generatedBy: {
     type: DataTypes.INTEGER,
     allowNull: true,
@@ -40,5 +36,11 @@ const Users = db.define("users", {
     allowNull: false,
   },
 });
+
+Users.associate = (models) => {
+  Users.hasMany(models.LoginLogs, {
+    foreignKey: "userId",
+  });
+};
 
 export default Users;

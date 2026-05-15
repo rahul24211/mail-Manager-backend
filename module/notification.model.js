@@ -21,7 +21,7 @@ const Notifications = db.define("notification", {
     type: DataTypes.INTEGER,
     allowNull: false,
   },
-  tital: {
+  title: {
     type: DataTypes.STRING,
     allowNull: true,
   },
