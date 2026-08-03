@@ -1,4 +1,4 @@
-const { Users, LoginLogs } = db;
+
 import jwt from "jsonwebtoken";
 import Requests from "../module/request.model.js";
 import Notifications from "../module/notification.model.js";
@@ -11,8 +11,14 @@ import db from "../module/models.index.js";
 import Categories from "../module/categories.model.js";
 import Products from "../module/product.model.js";
 import Cart from "../module/cart.model.js";
+import Coupon from "../module/coupon.model.js";
+import PendingUser from "../module/pendingUser.model.js";
+import otpGenerator, { generate } from "otp-generator";
+import sendOtp from "../helper/sendOtp.js";
 
 dotenv.config();
+
+const { Users, LoginLogs } = db;
 
 export const createUser = async (req, res) => {
   const { name, email, password, userType } = req.body;
@@ -42,24 +48,173 @@ export const createUser = async (req, res) => {
       return res.status(400).json({ message: "user is already exits" });
     }
 
+    const pendingUser = await PendingUser.findOne({ where: { email } });
+
+    const otp = otpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+    if (pendingUser) {
+      await pendingUser.update({
+        password,
+        otp,
+        otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+      });
+    } else {
+      await PendingUser.create({
+        name,
+        email,
+        password,
+        userType,
+        generatedBy: req.user.id,
+        otp,
+        otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+        isVerify: true,
+      });
+    }
+    await sendOtp(email, otp);
+    res.status(201).json({ message: "OTP Send Successfully", success: true });
+  } catch (error) {
+    console.error("ERROR", error);
+  }
+};
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const pendingUser = await PendingUser.findOne({
+      where: { email },
+    });
+
+    if (!pendingUser) {
+      return res
+        .status(404)
+        .json({ message: "User Not Found", success: false });
+    }
+
+    if (pendingUser.otp !== otp) {
+      return res.status(400).json({ message: "Invailid OTP", success: false });
+    }
+
+    if (new Date() > pendingUser.otpExpiry) {
+      return res.status(400).json({ message: "OTP Expire" });
+    }
+
     const newUser = await Users.create({
-      name,
-      email,
-      password,
-      userType,
-      generatedBy: req.user.id,
+      name: pendingUser.name,
+      email: pendingUser.email,
+      password: pendingUser.password,
+      userType: pendingUser.userType,
+      generatedBy: pendingUser.generatedBy,
+      isVerify: true,
+    });
+
+    await PendingUser.destroy({ where: { email } });
+    res
+      .status(201)
+      .json({ message: "Account Created Successfuly", success: true });
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+export const forgetPass = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email Missing", success: false });
+    }
+    const checkEmail = await Users.findOne({ where: { email } });
+    if (!checkEmail) {
+      return res
+        .status(404)
+        .json({ message: "User Not Found", success: false });
+    }
+    const otp = otpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+    const pendingUser = await PendingUser.findOne({ where: { email } });
+    if (pendingUser) {
+      await PendingUser.update(
+        {
+          otp,
+          otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+        },
+        { where: { email } },
+      );
+    } else {
+      await PendingUser.create({
+        name: checkEmail.name,
+        email: checkEmail.email,
+        password: checkEmail.password,
+        userType: checkEmail.userType,
+        otp,
+        otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
+      });
+    }
+    await sendOtp(email, otp);
+    res.status(200).json({ message: "OTP Send Successfully", success: true });
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+export const forgetPassVerify = async (req, res) => {
+  try {
+    const { email, otp, password } = req.body;
+
+    if (!email) {
+      return res.status(404).json({ message: "Email Missing", success: false });
+    }
+    if (!otp) {
+      return res.status(404).json({ message: "otp Missing", success: false });
+    }
+    if (!password) {
+      return res
+        .status(404)
+        .json({ message: "password Missing", success: false });
+    }
+
+    const checkEmail = await PendingUser.findOne({ where: { email } });
+    if (!checkEmail) {
+      return res.status(404).json({ message: "user not found" });
+    }
+
+    if (checkEmail.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP", success: false });
+    }
+
+    if (new Date() > checkEmail.otpExpiry) {
+      return res.status(400).json({ message: "OTP Expire", success: false });
+    }
+
+    await Users.update(
+      {
+        password: password,
+      },
+      { where: { email } },
+    );
+
+    await PendingUser.destroy({
+      where: { email },
     });
 
     res
-      .status(201)
-      .json({ message: "User Create Successfully", data: newUser });
+      .status(200)
+      .json({ message: "Password Update Successfully", success: true });
   } catch (error) {
-    console.error("ERROR", error.message);
+    console.error(error.message);
   }
 };
 
 export const login = async (req, res) => {
   const { email, password } = req.body;
+
+  console.log("email--- :", email);
+  console.log("password--- :", password);
 
   try {
     if (!email || !password) {
@@ -1107,28 +1262,37 @@ export const addToCart = async (req, res) => {
     if (!checkProduct) {
       return res.status(404).json({ message: "product not found" });
     }
-    let checkCart = await Cart.findOne({ where: { product_id: productId } });
+    let checkCart = await Cart.findOne({
+      where: { product_id: productId, user_id: userId },
+    });
     if (checkCart) {
       checkCart.quantity = checkCart.quantity + quantity;
       let subtotal = checkCart.quantity * checkProduct.Price;
-      checkCart.subtotal = checkCart.subtotal + subtotal;
+      checkCart.subtotal = subtotal;
+      let deliveryFees = 50;
       if (subtotal > 500) {
-        checkCart.deliveryFees = 0;
+        deliveryFees = 0;
       }
-      let totalPrice = subtotal * checkCart.quantity - deliveryFees - discount;
+      checkCart.deliveryFees = deliveryFees;
+      let discount = 0;
+      let totalPrice = subtotal + deliveryFees - discount;
       checkCart.total_price = totalPrice;
       await checkCart.save();
       return res
         .status(200)
         .json({ message: "Add to Cart Successfully", checkCart });
     } else {
+      let subtotal = quantity * checkProduct.Price;
+      let deliveryFees = subtotal > 500 ? 0 : 50;
+      let totalPrice = subtotal + deliveryFees;
       const addCrat = await Cart.create({
         user_id: userId,
         product_id: productId,
         quantity: quantity,
         price: checkProduct.Price,
-        subtotal: quantity * checkProduct.Price,
-       total_price : checkProduct.Price * quantity
+        subtotal: subtotal,
+        deliveryFees: deliveryFees,
+        total_price: totalPrice,
       });
       return res
         .status(201)
@@ -1162,14 +1326,55 @@ export const getCartDetails = async (req, res) => {
   }
 };
 
+export const getCartById = async (req, res) => {
+  try {
+    const { cart_id } = req.query;
+
+    if (!cart_id) {
+      return res.status(404).json({ message: "Id Missing", success: false });
+    }
+
+    const details = await Cart.findByPk(cart_id)
+    if (!details) {
+      return res.status(404).json({ message: "not found", success: false });
+    }
+
+    res.status(200).json({ message: "Success", success: true, details })
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
 export const updateCart = async (req, res) => {
   try {
     const { cartDetails } = req.body;
+    if (!cartDetails || cartDetails.length === 0) {
+      return res.status(400).json({
+        message: "Cart details missing",
+      });
+    }
     for (const item of cartDetails) {
-      const totalPrice = item.quantity * item.price;
+      const checkCart = await Cart.findByPk(item.cart_id);
+      if (!checkCart) {
+        continue;
+      }
+      let quantity = Number(item.quantity);
+      if (quantity <= 0) {
+        continue;
+      }
+      let subtotal = quantity * checkCart.price;
+      let deliveryFees = 50;
+
+      if (subtotal > 500) {
+        deliveryFees = 0;
+      }
+      let discount = 0;
+      let totalPrice = subtotal + deliveryFees - discount;
       await Cart.update(
         {
-          quantity: item.quantity,
+          quantity: quantity,
+          subtotal: subtotal,
+          deliveryFees: deliveryFees,
           total_price: totalPrice,
         },
         { where: { cart_id: item.cart_id } },
@@ -1191,6 +1396,126 @@ export const deleteCartProduct = async (req, res) => {
       where: { cart_id: cart_id },
     });
     res.status(200).json({ message: "Remove successfully" });
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+export const addCoupon = async (req, res) => {
+  try {
+    const {
+      code,
+      discount_type,
+      discount_value,
+      min_order_discount,
+      expiry_date,
+    } = req.body;
+
+    const checkCoupon = await Coupon.findOne({
+      where: { code: code.toUpperCase() },
+    });
+    if (checkCoupon) {
+      return res.status(400).json({ message: "Coupon Already Exists" });
+    }
+    await Coupon.create({
+      code: code.toUpperCase(),
+      discount_type,
+      discount_value,
+      min_order_discount,
+      expiry_date,
+    });
+    res.status(201).json({ message: "Coupon Created Successfully" });
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+export const getCoupon = async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.userType !== "Admin") {
+      return res.status(401).json({ message: "unAuthorize Person" });
+    }
+
+    const findCoupons = await Coupon.findAll({
+      where: { isActive: true },
+      order: [["createdAt", "DESC"]],
+    });
+    res
+      .status(200)
+      .json({ message: "Coupons Fetch Successfully", findCoupons });
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+export const deleteCoupon = async (req, res) => {
+  try {
+    const { coupon_id } = req.query;
+    const user = req.user;
+    if (user.userType !== "Admin") {
+      return res.status(401).json({ message: "UnAuthoriza Person" });
+    }
+    if (!coupon_id) {
+      return res.status(404).json({ message: "Counpon_Id Missing" });
+    }
+
+    let checkCoupon = await Coupon.findByPk(coupon_id);
+    if (!checkCoupon) {
+      return res.status(404).json({ message: "Coupon Not Found" });
+    }
+
+    checkCoupon.isActive = false;
+    await checkCoupon.save();
+    res.status(200).json({ message: "Coupon Delete Successfully" });
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+export const applyCoupon = async (req, res) => {
+  try {
+    const { id } = req.query;
+    const { code } = req.body;
+    const checkCart = await Cart.findByPk(id);
+    if (!checkCart) {
+      return res.status(400).json({ message: "cart Id Missing Select Item" });
+    }
+
+    if (!code) {
+      return res.status(404).json({ message: "Promo Code Missing" });
+    }
+    const checkCode = await Coupon.findOne({
+      where: { code: code.toUpperCase(), isActive: true },
+    });
+    if (!checkCode) {
+      return res.status(400).json({ message: "Invalid Promo Code" });
+    }
+
+    if (checkCode.isActive === false) {
+      return res.status(400).json({ message: "Expire Promo Code" });
+    }
+
+    if (checkCode.min_order_discount > checkCart.total_price) {
+      return res.status(400).json({
+        message: `Minium Order Discount Is ${checkCode.min_order_discount}Rs`,
+      });
+    }
+
+    let discount = 0;
+    if (checkCode.discount_type === "flat") {
+      discount = checkCode.discount_value;
+    }
+    if (checkCode.discount_type === "percentage") {
+      discount = (checkCart.total_price * checkCode.discount_value) / 100;
+    }
+    const finalAmount = checkCart.total_price - discount;
+    return res.status(200).json({
+      message: "Coupon Apply Successfully",
+      code: code,
+      discount,
+      finalAmount,
+    });
   } catch (error) {
     console.error(error.message);
   }

@@ -4,24 +4,31 @@ import {
   addAddress,
   addBanner,
   AddCategories,
+  addCoupon,
   addProduct,
   addToCart,
   allUsers,
+  applyCoupon,
   changePassword,
   createUser,
   deleteBanner,
   deleteCartProduct,
   deleteCategory,
+  deleteCoupon,
   deletedMailByUser,
   deleteNotification,
   deleteProduct,
   fetchMailById,
+  forgetPass,
+  forgetPassVerify,
   getAddress,
   getAllNotifications,
   getAllRequests,
   getBanners,
+  getCartById,
   getCartDetails,
   getCategories,
+  getCoupon,
   getProductByC,
   getSummary,
   login,
@@ -38,6 +45,7 @@ import {
   updateUserStatus,
   userDetails,
   userMail,
+  verifyOtp,
 } from "../controller/user.controller.js";
 import { upload } from "../midillware/multer.js";
 
@@ -93,7 +101,15 @@ router.patch(
 );
 router.patch("/deleteproduct", verifyToken, deleteProduct);
 router.post("/addtocart", verifyToken, addToCart);
-router.get("/getcartdetails", verifyToken,getCartDetails)
-router.patch("/updatecart",verifyToken,updateCart)
-router.delete("/deletecartproduct",verifyToken,deleteCartProduct)
+router.get("/getcartdetails", verifyToken, getCartDetails);
+router.patch("/updatecart", verifyToken, updateCart);
+router.delete("/deletecartproduct", verifyToken, deleteCartProduct);
+router.post("/addcoupon", verifyToken, addCoupon);
+router.get("/getcoupon", verifyToken, getCoupon);
+router.patch("/deletecoupon", verifyToken, deleteCoupon);
+router.post("/applycoupon", verifyToken, applyCoupon);
+router.post("/verifyotp", verifyToken, verifyOtp);
+router.post("/forgetpass", forgetPass);
+router.post("/forgetpassverify", forgetPassVerify);
+router.get("/getcartbyid", getCartById);
 export default router;
